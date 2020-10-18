@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import sys
 import json
 import stream
 from absl import flags
@@ -12,19 +13,25 @@ from tqdm import tqdm
 from google.protobuf.json_format import Parse
 
 from pysc2.lib import features
-from pysc2.lib import FUNCTIONS
 from pysc2.lib import static_data
 from s2clientprotocol import sc2api_pb2 as sc_pb
+from s2clientprotocol import common_pb2 as sc_common
 
 FLAGS = flags.FLAGS
+
+flags.DEFINE_string(name='version', default='4.10.0',
+                    help='Game version to use, if replays don\'t match, ignore them')
 flags.DEFINE_string(name='hq_replay_set', default='../high_quality_replays/Terran_vs_Terran.json',
                     help='File storing replays list')
 flags.DEFINE_string(name='parsed_replay_path', default='../parsed_replays',
                     help='Path storing parsed replays')
 flags.DEFINE_integer(name='step_mul', default=8,
                      help='step size')
+FLAGS(sys.argv)
 
-def process_replay(sampled_action, actions, observations, feat, units_info, reward):
+RECTANGULAR_DIMENSIONS = features.Dimensions(screen=(84, 80), minimap=(64, 67))
+
+def process_replay(sampled_action, actions, observations, feats, units_info, reward):
     states = []
 
     for frame_id, action, obs in zip(sampled_action, actions, observations):
@@ -33,10 +40,9 @@ def process_replay(sampled_action, actions, observations, feat, units_info, rewa
         state['action'] = None
         if action is not None:
             try:
-                func_id = feat.reverse_action(action).function
-                func_name = FUNCTIONS[func_id].name
-                if func_name.split('_')[0] in {'Build', 'Train', 'Research', 'Morph', 'Cancel', 'Halt', 'Stop'}:
-                    state['action'] = (func_id, func_name)
+                func_id = feats.reverse_action(action).function
+                if str(func_id).split('.')[1] in {'Build', 'Train', 'Research', 'Morph', 'Cancel', 'Halt', 'Stop'}:
+                    state['action'] = (func_id, func_id)
             except ValueError:
                 pass
 
@@ -121,7 +127,9 @@ def parse_replay(replay_player_path, sampled_action_path, reward):
     with open(os.path.join(FLAGS.parsed_replay_path, 'GlobalInfos', replay_player_path)) as f:
         global_info = json.load(f)
     units_info = static_data.StaticData(Parse(global_info['data_raw'], sc_pb.ResponseData())).units
-    feat = features.Features(Parse(global_info['game_info'], sc_pb.ResponseGameInfo()))
+    feats = features.Features(features.AgentInterfaceFormat(
+        feature_dimensions=RECTANGULAR_DIMENSIONS,
+        hide_specific_actions=False))
 
     # Sampled Actions
     with open(sampled_action_path) as f:
@@ -140,7 +148,7 @@ def parse_replay(replay_player_path, sampled_action_path, reward):
 
     assert len(sampled_action) == len(sampled_action_id) == len(actions) == len(observations)
 
-    states = process_replay(sampled_action, actions, observations, feat, units_info, reward)
+    states = process_replay(sampled_action, actions, observations, feats, units_info, reward)
 
     with open(os.path.join(FLAGS.parsed_replay_path, 'GlobalFeatures', replay_player_path), 'w') as f:
         json.dump(states, f)
@@ -165,7 +173,7 @@ def main():
         replay_name = os.path.basename(replay_path)
         sampled_action_path = os.path.join(FLAGS.parsed_replay_path, 'SampledActions', race_vs_race, replay_name)
         for player_info in info.player_info:
-            race = sc_pb.Race.Name(player_info.player_info.race_actual)
+            race = sc_common.Race.Name(player_info.player_info.race_actual)
             player_id = player_info.player_info.player_id
             reward = player_info.player_result.result
 

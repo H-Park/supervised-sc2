@@ -18,18 +18,22 @@ from google.protobuf.json_format import MessageToJson
 from pysc2 import run_configs
 from pysc2.lib import point
 from s2clientprotocol import sc2api_pb2 as sc_pb
+from s2clientprotocol import common_pb2 as sc_common
 
 FLAGS = flags.FLAGS
+
+flags.DEFINE_string(name='version', default='4.10.0',
+                    help='Game version to use, if replays don\'t match, ignore them')
 flags.DEFINE_string(name='hq_replay_set', default='../high_quality_replays/Terran_vs_Terran.json',
                     help='File storing replays list')
 flags.DEFINE_string(name='save_path', default='../parsed_replays',
                     help='Path for saving results')
 
-flags.DEFINE_integer(name='n_instance', default=16,
+flags.DEFINE_integer(name='n_instance', default=1,
                      help='# of processes to run')
 flags.DEFINE_integer(name='step_mul', default=8,
                      help='step size')
-flags.DEFINE_integer(name='batch_size', default=10,
+flags.DEFINE_integer(name='batch_size', default=30,
                      help='# of replays to process in one iter')
 flags.DEFINE_integer(name='width', default=24,
                      help='World width')
@@ -74,7 +78,7 @@ class ReplayProcessor(multiprocessing.Process):
                             map_data = self.run_config.map_data(info.local_map_path)
 
                         for player_info in info.player_info:
-                            race = sc_pb.Race.Name(player_info.player_info.race_actual)
+                            race = sc_common.Race.Name(player_info.player_info.race_actual)
                             player_id = player_info.player_info.player_id
 
                             if os.path.isfile(os.path.join(FLAGS.save_path, race,
@@ -123,7 +127,7 @@ def main():
         if not os.path.isdir(path):
             os.makedirs(path)
 
-    run_config = run_configs.get()
+    run_config = run_configs.get(version=FLAGS.version)
     try:
         with open(FLAGS.hq_replay_set) as f:
             replay_list = json.load(f)

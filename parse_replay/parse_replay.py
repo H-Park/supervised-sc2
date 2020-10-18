@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import os
 import sys
+import sys
 import json
 import time
 import signal
@@ -18,26 +19,31 @@ from google.protobuf.json_format import MessageToJson
 from pysc2 import run_configs
 from pysc2.lib import point
 from s2clientprotocol import sc2api_pb2 as sc_pb
+from s2clientprotocol import common_pb2 as sc_common
 
 import stream
 
 FLAGS = flags.FLAGS
+
+flags.DEFINE_string(name='version', default='4.10.0',
+                    help='Game version to use, if replays don\'t match, ignore them')
 flags.DEFINE_string(name='hq_replay_set', default='../high_quality_replays/Terran_vs_Terran.json',
                     help='File storing replays list')
 flags.DEFINE_string(name='save_path', default='../parsed_replays',
                     help='Path for saving results')
 
-flags.DEFINE_integer(name='n_instance', default=16,
+flags.DEFINE_integer(name='n_instance', default=1,
                      help='# of processes to run')
-flags.DEFINE_integer(name='batch_size', default=10,
+flags.DEFINE_integer(name='batch_size', default=1,
                      help='# of replays to process in one iter')
 
-flags.DEFINE_integer(name='width', default=24,
+flags.DEFINE_integer(name='width', default=84,
                      help='World width')
 flags.DEFINE_integer(name='map_size', default=64,
                      help='Map size')
-
 FLAGS(sys.argv)
+
+
 size = point.Point(FLAGS.map_size, FLAGS.map_size)
 interface = sc_pb.InterfaceOptions(raw=True, score=True,
                 feature_layer=sc_pb.SpatialCameraSetup(width=FLAGS.width))
@@ -83,7 +89,7 @@ class ReplayProcessor(multiprocessing.Process):
                             map_data = self.run_config.map_data(info.local_map_path)
 
                         for player_info in info.player_info:
-                            race = sc_pb.Race.Name(player_info.player_info.race_actual)
+                            race = sc_common.Race.Name(player_info.player_info.race_actual)
                             player_id = player_info.player_info.player_id
 
                             observation_path = os.path.join(FLAGS.save_path, race,
@@ -155,14 +161,14 @@ def main():
             replay_list = json.load(f)
         replay_list = sorted([p for p, _ in replay_list])
 
-        replay_queue = multiprocessing.JoinableQueue(FLAGS.n_instance * 10)
+        replay_queue = multiprocessing.JoinableQueue(FLAGS.n_instance)
         replay_queue_thread = threading.Thread(target=replay_queue_filler,
                                            args=(replay_queue, replay_list))
         replay_queue_thread.daemon = True
         replay_queue_thread.start()
 
         counter = multiprocessing.Value('i', 0)
-        for i in range(FLAGS.n_instance):
+        for _ in range(FLAGS.n_instance):
             p = ReplayProcessor(run_config, replay_queue, counter, len(replay_list))
             p.daemon = True
             p.start()
