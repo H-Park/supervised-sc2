@@ -1,4 +1,4 @@
-# SupervisedCraft II
+# Supervised SC2
 
 This project aims to reproduce Deepmind's initial results of their supervised agent by similarly training a Convolutional Neural Network (CNN) in a supervised fashion from players Diamond 1 and better. 
 
