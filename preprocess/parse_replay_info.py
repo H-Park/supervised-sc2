@@ -29,7 +29,7 @@ flags.DEFINE_string(name='save_path', default='../replays_infos',
 
 flags.DEFINE_integer(name='n_instance', default=1,
                      help='# of processes to run')
-flags.DEFINE_integer(name='batch_size', default=30,
+flags.DEFINE_integer(name='batch_size', default=10,
                      help='# of replays to process in one iter')
 FLAGS(sys.argv)
 
@@ -85,7 +85,7 @@ def main():
         replay_list = sorted(chain(*[run_config.replay_paths(path)
                                         for path in FLAGS.replays_paths.split(';')
                                             if len(path.strip()) > 0]))
-        replay_queue = multiprocessing.JoinableQueue(FLAGS.n_instance * 10)
+        replay_queue = multiprocessing.JoinableQueue(FLAGS.n_instance)
         replay_queue_thread = threading.Thread(target=replay_queue_filler,
                                                args=(replay_queue, replay_list))
         replay_queue_thread.daemon = True
@@ -101,7 +101,8 @@ def main():
         replay_queue.join() # Wait for the queue to empty.
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt, exiting.")
-    print(bad_counter)
+    time.sleep(1)
+    print("Corrupt replays: ", str(bad_counter))
 
 if __name__ == '__main__':
     main()
