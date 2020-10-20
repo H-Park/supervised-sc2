@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import sys
 import json
 import glob
 from absl import flags
@@ -12,21 +13,25 @@ from google.protobuf.json_format import Parse
 
 from pysc2 import run_configs
 from s2clientprotocol import sc2api_pb2 as sc_pb
+from s2clientprotocol import common_pb2 as sc_common
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string(name='infos_path', default='../replays_infos',
+flags.DEFINE_string(name='infos_path', default='../replays_infos/',
                     help='Paths for infos of replays')
+flags.DEFINE_string(name='version', default='4.10.0',
+                    help='Game version to use, if replays don\'t match, ignore them')
 flags.DEFINE_string(name='save_path', default='../high_quality_replays',
                     help='Path for saving results')
-
-flags.DEFINE_integer(name='min_duration', default=10000,
+flags.DEFINE_integer(name='min_duration', default=3000,
                      help='Min duration')
 flags.DEFINE_integer(name='max_duration', default=None,
                      help='Max duration')
-flags.DEFINE_integer(name='min_apm', default=10,
+flags.DEFINE_integer(name='min_apm', default=25,
                      help='Min APM')
-flags.DEFINE_integer(name='min_mmr', default=1000,
+flags.DEFINE_integer(name='min_mmr', default=300,
                      help='Min MMR')
+
+FLAGS(sys.argv)
 
 def valid_replay(info, ping):
     """Make sure the replay isn't corrupt, and is worth looking at."""
@@ -56,7 +61,7 @@ def main():
         os.makedirs(FLAGS.save_path)
     replay_infos = glob.glob(os.path.join(FLAGS.infos_path, '*.SC2Replay'))
 
-    run_config = run_configs.get()
+    run_config = run_configs.get(version=FLAGS.version)
     with run_config.start() as controller:
         ping = controller.ping()
 
@@ -69,7 +74,7 @@ def main():
         proto = Parse(info['info'], sc_pb.ResponseReplayInfo())
         if valid_replay(proto, ping):
             players_info = proto.player_info
-            races = '_vs_'.join(sorted(sc_pb.Race.Name(player_info.player_info.race_actual)
+            races = '_vs_'.join(sorted(sc_common.Race.Name(player_info.player_info.race_actual)
                                        for player_info in players_info))
             if races not in result:
                 result[races] = []
