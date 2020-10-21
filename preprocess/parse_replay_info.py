@@ -22,25 +22,25 @@ from pysc2.lib.remote_controller import RequestError
 FLAGS = flags.FLAGS
 flags.DEFINE_string(name='version', default='4.10.0',
                     help='Game version to use, if replays don\'t match, ignore them')
-flags.DEFINE_string(name='replays_paths', default='/home/hunter/Documents/small_replays/',
+flags.DEFINE_string(name='replays_paths', default='/Users/hunterpark/Documents/replays/',
                     help='Paths for replays, split by ;')
 flags.DEFINE_string(name='save_path', default='../replays_infos',
                     help='Path for saving results')
 
 flags.DEFINE_integer(name='n_instance', default=1,
                      help='# of processes to run')
-flags.DEFINE_integer(name='batch_size', default=10,
+flags.DEFINE_integer(name='batch_size', default=30,
                      help='# of replays to process in one iter')
 FLAGS(sys.argv)
 
-bad_counter = 0
 class ReplayProcessor(multiprocessing.Process):
     """A Process that pulls replays and processes them."""
-    def __init__(self, run_config, replay_queue, counter, total_num):
+    def __init__(self, run_config, replay_queue, counter, bad_counter, total_num):
         super(ReplayProcessor, self).__init__()
         self.run_config = run_config
         self.replay_queue = replay_queue
         self.counter = counter
+        self.bad_counter = bad_counter
         self.total_num = total_num
 
     def run(self):
@@ -62,12 +62,13 @@ class ReplayProcessor(multiprocessing.Process):
                             info_json = MessageToJson(info)
                             with open(os.path.join(FLAGS.save_path, os.path.basename(replay_path)), 'w') as f:
                                 json.dump({'info': info_json, 'path':replay_path}, f)
+                        except RequestError as _:
+                            with self.bad_counter.get_lock():
+                                self.bad_counter.value += 1
+                        finally:
                             with self.counter.get_lock():
                                 self.counter.value += 1
                                 print('Processing {}/{} ...'.format(self.counter.value, self.total_num))
-                        except RequestError:
-                            bad_counter += 1
-                            pass
                     finally:
                         self.replay_queue.task_done()
 
@@ -92,17 +93,22 @@ def main():
         replay_queue_thread.start()
 
         counter = multiprocessing.Value('i', 0)
+        bad_counter = multiprocessing.Value('i', 0)
+        replay_processors = []
         for _ in range(FLAGS.n_instance):
-            p = ReplayProcessor(run_config, replay_queue, counter, len(replay_list))
-            p.daemon = True
-            p.start()
+            rp = ReplayProcessor(run_config, replay_queue, counter, bad_counter, len(replay_list))
+            rp.daemon = True
+            rp.start()
+            replay_processors.append(rp)
             time.sleep(1)   # Stagger startups, otherwise they seem to conflict somehow
 
         replay_queue.join() # Wait for the queue to empty.
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt, exiting.")
+
     time.sleep(1)
-    print("Corrupt replays: ", str(bad_counter))
+    with bad_counter.get_lock():
+        print("Corrupt replays: ", str(bad_counter.value))
 
 if __name__ == '__main__':
     main()

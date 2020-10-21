@@ -1,7 +1,9 @@
 ## Downloading Replays Guide
+
 `download_replays.py` is a script provided by Blizzard to download replay packs (aggregated into zip files) via Blizzard Game Data APIs. 
 
 ## Preliminary Setup
+
 1. Create an account for calling the APIs in the [Blizzard Developer Portal](https://dev.battle.net).
 2. Get API key and secret associated with the account.
     1. You can find them under the 'My Account' page after logging into the developer portal.
