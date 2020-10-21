@@ -53,7 +53,6 @@ def valid_replay(info, ping):
             return False
         if p.player_result.result not in {1, 2}:
             return False
-    print("got here")
     return True
 
 def main():
