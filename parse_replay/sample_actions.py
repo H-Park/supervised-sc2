@@ -18,7 +18,7 @@ from s2clientprotocol import common_pb2 as sc_common
 FLAGS = flags.FLAGS
 flags.DEFINE_string(name='version', default='4.10.0',
                     help='Game version to use, if replays don\'t match, ignore them')
-flags.DEFINE_string(name='hq_replay_set', default='../high_quality_replays/Terran_vs_Terran.json',
+flags.DEFINE_string(name='hq_replay_set', default='../high_quality_replays/Terran_vs_Zerg.json',
                     help='File storing replays list')
 flags.DEFINE_string(name='parsed_replays', default='../parsed_replays',
                     help='Path for parsed actions')
@@ -77,7 +77,7 @@ def sample_action(replay_path, action_path, sampled_path):
             return
 
         result.append(sample_action_from_player(action_file))
-
+        
     assert len(result) == 2
     sampled_actions = sorted(set(result[0]) | set(result[1]))
 

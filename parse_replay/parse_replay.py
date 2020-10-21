@@ -27,7 +27,7 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_string(name='version', default='4.10.0',
                     help='Game version to use, if replays don\'t match, ignore them')
-flags.DEFINE_string(name='hq_replay_set', default='../high_quality_replays/Terran_vs_Terran.json',
+flags.DEFINE_string(name='hq_replay_set', default='../high_quality_replays/Terran_vs_Zerg.json',
                     help='File storing replays list')
 flags.DEFINE_string(name='save_path', default='../parsed_replays',
                     help='Path for saving results')
@@ -49,6 +49,20 @@ interface = sc_pb.InterfaceOptions(raw=True, score=True,
                 feature_layer=sc_pb.SpatialCameraSetup(width=FLAGS.width))
 size.assign_to(interface.feature_layer.resolution)
 size.assign_to(interface.feature_layer.minimap_resolution)
+
+
+# Configure save path globally, as windows and mac don't like editing flags values
+race_vs_race = os.path.basename(FLAGS.hq_replay_set).split('.')[0]
+save_path = os.path.join(FLAGS.save_path, 'SampledObservations', race_vs_race)
+
+for race in set(race_vs_race.split('_vs_')):
+    path = os.path.join(save_path, race)
+    if not os.path.isdir(path):
+        os.makedirs(path)
+
+    path = path.replace('SampledObservations', 'GlobalInfos')
+    if not os.path.isdir(path):
+        os.makedirs(path)
 
 class ReplayProcessor(multiprocessing.Process):
     """A Process that pulls replays and processes them."""
@@ -72,12 +86,10 @@ class ReplayProcessor(multiprocessing.Process):
                         with self.counter.get_lock():
                             self.counter.value += 1
                             print('Processing {}/{} ...'.format(self.counter.value, self.total_num))
-
-                        sampled_action_path = os.path.join(FLAGS.save_path.replace(
+                        sampled_action_path = os.path.join(save_path.replace(
                             'SampledObservations', 'SampledActions'), os.path.basename(replay_path))
                         if not os.path.isfile(sampled_action_path):
                             return
-
                         with open(sampled_action_path) as f:
                             actions = json.load(f)
                         actions.insert(0, 0)
@@ -92,13 +104,13 @@ class ReplayProcessor(multiprocessing.Process):
                             race = sc_common.Race.Name(player_info.player_info.race_actual)
                             player_id = player_info.player_info.player_id
 
-                            observation_path = os.path.join(FLAGS.save_path, race,
+                            observation_path = os.path.join(save_path, race,
                                                             '{}@{}'.format(player_id, os.path.basename(replay_path)))
                             global_info_path = observation_path.replace('SampledObservations', 'GlobalInfos')
 
                             if os.path.isfile(observation_path) and os.path.isfile(global_info_path):
                                 continue
-
+                            
                             ostream = stream.open(observation_path, 'wb', buffer_size=1000)
                             self.process_replay(controller, replay_data, map_data, player_id, actions,
                                                 ostream, global_info_path)
@@ -143,19 +155,7 @@ def replay_queue_filler(replay_queue, replay_list):
         replay_queue.put(replay_path)
 
 def main():
-    race_vs_race = os.path.basename(FLAGS.hq_replay_set).split('.')[0]
-    FLAGS.save_path = os.path.join(FLAGS.save_path, 'SampledObservations', race_vs_race)
-
-    for race in set(race_vs_race.split('_vs_')):
-        path = os.path.join(FLAGS.save_path, race)
-        if not os.path.isdir(path):
-            os.makedirs(path)
-
-        path = path.replace('SampledObservations', 'GlobalInfos')
-        if not os.path.isdir(path):
-            os.makedirs(path)
-
-    run_config = run_configs.get()
+    run_config = run_configs.get(version=FLAGS.version)
     try:
         with open(FLAGS.hq_replay_set) as f:
             replay_list = json.load(f)

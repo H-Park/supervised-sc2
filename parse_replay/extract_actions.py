@@ -24,7 +24,7 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_string(name='version', default='4.10.0',
                     help='Game version to use, if replays don\'t match, ignore them')
-flags.DEFINE_string(name='hq_replay_set', default='../high_quality_replays/Terran_vs_Terran.json',
+flags.DEFINE_string(name='hq_replay_set', default='../high_quality_replays/Terran_vs_Zerg.json',
                     help='File storing replays list')
 flags.DEFINE_string(name='save_path', default='../parsed_replays',
                     help='Path for saving results')
@@ -41,11 +41,21 @@ flags.DEFINE_integer(name='map_size', default=64,
                      help='Map size')
 
 FLAGS(sys.argv)
+
 size = point.Point(FLAGS.map_size, FLAGS.map_size)
 interface = sc_pb.InterfaceOptions(raw=True, score=False,
                                    feature_layer=sc_pb.SpatialCameraSetup(width=FLAGS.width))
 size.assign_to(interface.feature_layer.resolution)
 size.assign_to(interface.feature_layer.minimap_resolution)
+
+
+# Configure save path globally, as windows and mac don't like editing flags values
+race_vs_race = os.path.basename(FLAGS.hq_replay_set).split('.')[0]
+save_path = os.path.join(FLAGS.save_path, 'Actions', race_vs_race)
+for race in set(race_vs_race.split('_vs_')):
+    path = os.path.join(save_path, race)
+    if not os.path.isdir(path):
+        os.makedirs(path)
 
 class ReplayProcessor(multiprocessing.Process):
     """A Process that pulls replays and processes them."""
@@ -80,11 +90,10 @@ class ReplayProcessor(multiprocessing.Process):
                         for player_info in info.player_info:
                             race = sc_common.Race.Name(player_info.player_info.race_actual)
                             player_id = player_info.player_info.player_id
-
-                            if os.path.isfile(os.path.join(FLAGS.save_path, race,
+                        
+                            if os.path.isfile(os.path.join(save_path, race,
                                                            '{}@{}'.format(player_id, os.path.basename(replay_path)))):
                                 continue
-
                             self.process_replay(controller, replay_data, map_data, player_id, race, replay_path)
                     except Exception as e:
                         print(e)
@@ -99,7 +108,7 @@ class ReplayProcessor(multiprocessing.Process):
             options=interface,
             observed_player_id=player_id))
 
-        save_folder = os.path.join(FLAGS.save_path, race)
+        save_folder = os.path.join(save_path, race)
         actions = []
         controller.step()
         while True:
@@ -119,21 +128,13 @@ def replay_queue_filler(replay_queue, replay_list):
         replay_queue.put(replay_path)
 
 def main():
-    race_vs_race = os.path.basename(FLAGS.hq_replay_set).split('.')[0]
-    FLAGS.save_path = os.path.join(FLAGS.save_path, 'Actions', race_vs_race)
-
-    for race in set(race_vs_race.split('_vs_')):
-        path = os.path.join(FLAGS.save_path, race)
-        if not os.path.isdir(path):
-            os.makedirs(path)
-
     run_config = run_configs.get(version=FLAGS.version)
     try:
         with open(FLAGS.hq_replay_set) as f:
             replay_list = json.load(f)
         replay_list = sorted([p for p, _ in replay_list])
 
-        replay_queue = multiprocessing.JoinableQueue(FLAGS.n_instance * 10)
+        replay_queue = multiprocessing.JoinableQueue(FLAGS.n_instance)
         replay_queue_thread = threading.Thread(target=replay_queue_filler,
                                            args=(replay_queue, replay_list))
         replay_queue_thread.daemon = True
