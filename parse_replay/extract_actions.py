@@ -128,6 +128,7 @@ def replay_queue_filler(replay_queue, replay_list):
         replay_queue.put(replay_path)
 
 def main():
+    print(FLAGS.hq_replay_set)
     run_config = run_configs.get(version=FLAGS.version)
     try:
         with open(FLAGS.hq_replay_set) as f:
@@ -141,7 +142,7 @@ def main():
         replay_queue_thread.start()
 
         counter = multiprocessing.Value('i', 0)
-        for i in range(FLAGS.n_instance):
+        for _ in range(FLAGS.n_instance):
             p = ReplayProcessor(run_config, replay_queue, counter, len(replay_list))
             p.daemon = True
             p.start()
