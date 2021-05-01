@@ -1,5 +1,5 @@
 *.tar.gz
-
+settings.conf
 # PyCharm
 .idea
 
